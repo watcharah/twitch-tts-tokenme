@@ -281,12 +281,14 @@ async function startProxy() {
 }
 
 function createWindow() {
+  const iconPath = path.join(__dirname, "build", process.platform === "win32" ? "icon.ico" : "icon.png");
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 820,
     minWidth: 800,
     minHeight: 600,
     title: "Twitch Chat TTS",
+    icon: iconPath,
     backgroundColor: "#0f1115",
     autoHideMenuBar: true,
     webPreferences: {
