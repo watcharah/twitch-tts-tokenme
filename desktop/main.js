@@ -167,61 +167,40 @@ async function checkForUpdates({ silent } = { silent: true }) {
   }
 }
 
-function writeInstallerBat({ zipPath, extractDir, installRoot, exeName }) {
-  const batPath = path.join(app.getPath("temp"), "twitch-tts-update-installer.bat");
-  const pid = process.pid;
-  // Escape for batch: use short paths via quotes; replace % carefully
-  const q = (p) => `"${String(p).replace(/"/g, "")}"`;
-  const bat = `@echo off
-setlocal
-set PID=${pid}
-set ZIP=${q(zipPath)}
-set EXTRACT=${q(extractDir)}
-set TARGET=${q(installRoot)}
-set EXE=${q(path.join(installRoot, exeName))}
-
-:waitloop
-tasklist /FI "PID eq %PID%" 2>NUL | find "%PID%" >NUL
-if not errorlevel 1 (
-  timeout /t 1 /nobreak >NUL
-  goto waitloop
-)
-
-if exist %EXTRACT% rmdir /s /q %EXTRACT%
-mkdir %EXTRACT% >NUL 2>&1
-
-tar -xf %ZIP% -C %EXTRACT% 2>NUL
-if errorlevel 1 (
-  powershell -NoProfile -Command "Expand-Archive -LiteralPath %ZIP% -DestinationPath %EXTRACT% -Force"
-)
-
-set SRC=
-if exist %EXTRACT%\\TwitchChatTTS-win32-x64\\TwitchChatTTS.exe (
-  set SRC=%EXTRACT%\\TwitchChatTTS-win32-x64
-) else if exist %EXTRACT%\\TwitchChatTTS.exe (
-  set SRC=%EXTRACT%
-) else (
-  for /d %%D in (%EXTRACT%\\*) do (
-    if exist "%%D\\TwitchChatTTS.exe" set SRC=%%D
-  )
-)
-
-if not defined SRC (
-  echo Update extract failed > %TEMP%\\twitch-tts-update-error.txt
-  goto cleanup
-)
-
-xcopy /E /Y /I /Q "%SRC%\\*" %TARGET% >NUL
-start "" %EXE%
-
-:cleanup
-timeout /t 2 /nobreak >NUL
-if exist %ZIP% del /f /q %ZIP% >NUL 2>&1
-if exist %EXTRACT% rmdir /s /q %EXTRACT% >NUL 2>&1
-del /f /q "%~f0" >NUL 2>&1
+function writeInstallerScript({ zipPath, extractDir, installRoot, exeName }) {
+  const ps1Path = path.join(app.getPath("temp"), "twitch-tts-update-installer.ps1");
+  const lit = (p) => "'" + String(p).replace(/'/g, "''") + "'";
+  const ps = `$ErrorActionPreference = 'SilentlyContinue'
+$procId = ${process.pid}
+$zip = ${lit(zipPath)}
+$extract = ${lit(extractDir)}
+$target = ${lit(installRoot)}
+$exe = ${lit(path.join(installRoot, exeName))}
+for ($i = 0; $i -lt 120; $i++) {
+  if (-not (Get-Process -Id $procId -ErrorAction SilentlyContinue)) { break }
+  Start-Sleep -Milliseconds 500
+}
+Start-Sleep -Milliseconds 500
+if (Test-Path -LiteralPath $extract) { Remove-Item -LiteralPath $extract -Recurse -Force }
+New-Item -ItemType Directory -Path $extract -Force | Out-Null
+Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
+$found = Get-ChildItem -LiteralPath $extract -Recurse -Filter 'TwitchChatTTS.exe' | Select-Object -First 1
+if ($found) {
+  Copy-Item -Path (Join-Path $found.DirectoryName '*') -Destination $target -Recurse -Force
+  Start-Process -FilePath $exe
+} else {
+  'Update extract failed' | Out-File (Join-Path $env:TEMP 'twitch-tts-update-error.txt')
+}
+Start-Sleep -Seconds 2
+Remove-Item -LiteralPath $zip -Force
+Remove-Item -LiteralPath $extract -Recurse -Force
+Remove-Item -LiteralPath $PSCommandPath -Force
 `;
-  fs.writeFileSync(batPath, bat, "utf8");
-  return batPath;
+  fs.writeFileSync(ps1Path, "\ufeff" + ps, "utf8");
+  const vbsPath = path.join(app.getPath("temp"), "twitch-tts-update-launch.vbs");
+  const vbs = `Set sh = CreateObject("WScript.Shell")\r\nsh.Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File ""${ps1Path.replace(/"/g, "")}""", 0, False\r\nCreateObject("Scripting.FileSystemObject").DeleteFile WScript.ScriptFullName\r\n`;
+  fs.writeFileSync(vbsPath, vbs, "utf8");
+  return vbsPath;
 }
 
 async function startUpdate() {
@@ -247,13 +226,13 @@ async function startUpdate() {
     sendToRenderer("update-progress", { percent: 100, stage: "install" });
     const installRoot = getInstallRoot();
     const exeName = path.basename(process.execPath) || "TwitchChatTTS.exe";
-    const batPath = writeInstallerBat({
+    const vbsPath = writeInstallerScript({
       zipPath,
       extractDir,
       installRoot,
       exeName: app.isPackaged ? exeName : "TwitchChatTTS.exe",
     });
-    const child = spawn("cmd.exe", ["/c", batPath], {
+    const child = spawn("wscript.exe", ["//B", "//Nologo", vbsPath], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
