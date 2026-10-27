@@ -1,0 +1,9 @@
+{
+  "name": "twitch-chat-tts",
+  "productName": "TwitchChatTTS",
+  "version": "1.2.0",
+  "description": "Twitch Chat → TokenMe TTS portable desktop app",
+  "main": "main.js",
+  "author": "Watchara",
+  "license": "MIT"
+}

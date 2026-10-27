@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#07070c" />
+  <meta name="color-scheme" content="dark" />
+  <title>Twitch Chat TTS</title>
+  <link rel="stylesheet" href="styles.css?v=glassA4" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">🎙️</span>
+        <div>
+          <h1>Twitch Chat TTS</h1>
+          <p class="subtitle">Text-to-Speech for Twitch Chat Messages</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btnCheckUpdate" class="btn ghost sm desktop-only hidden" type="button" title="ตรวจอัปเดต">ตรวจอัปเดต</button>
+        <span id="appVersion" class="app-version desktop-only hidden"></span>
+        <div id="status" class="status disconnected" data-state="disconnected">ยังไม่เชื่อมต่อ</div>
+      </div>
+    </header>
+
+    <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite">
+      <div class="update-banner-text">
+        <strong id="updateBannerTitle">มีเวอร์ชันใหม่</strong>
+        <span id="updateBannerDetail"></span>
+      </div>
+      <div class="update-banner-actions">
+        <div id="updateProgressWrap" class="update-progress hidden">
+          <div class="update-progress-bar"><span id="updateProgressFill"></span></div>
+          <span id="updateProgressLabel">0%</span>
+        </div>
+        <button id="btnUpdateNow" class="btn primary sm" type="button">อัปเดตเลย</button>
+        <button id="btnUpdateLater" class="btn ghost sm" type="button">ภายหลัง</button>
+      </div>
+    </div>
+
+    <div class="shell">
+      <div class="columns">
+        <!-- LEFT -->
+        <div class="col col-left">
+          <section class="card card-connect" data-section="connect">
+            <h2>เชื่อมต่อช่อง</h2>
+            <div class="connect-row">
+              <label class="field channel-field">
+                <span class="sr-only">ชื่อช่อง Twitch</span>
+                <span class="input-wrap">
+                  <span class="input-icon" aria-hidden="true">📺</span>
+                  <input id="channel" type="text" placeholder="channel name" autocomplete="off" spellcheck="false" />
+                </span>
+              </label>
+              <button id="btnConnect" class="btn primary" type="button">เชื่อมต่อ</button>
+            </div>
+            <button id="btnDisconnect" class="btn disconnect-btn" type="button" disabled>ตัดการเชื่อมต่อ</button>
+            <p class="hint soft">IRC สาธารณะ (anonymous) — ไม่ต้อง login</p>
+          </section>
+
+          <section class="card card-queue" data-section="queue">
+            <div class="card-head">
+              <h2>คิว TTS <span class="badge" id="queueCount">0</span></h2>
+              <div class="queue-actions">
+                <button id="btnPause" class="btn ghost sm" type="button">Pause</button>
+                <button id="btnResume" class="btn ghost sm" type="button" disabled>Resume</button>
+                <button id="btnSkip" class="btn ghost sm" type="button">Skip</button>
+                <button id="btnClear" class="btn ghost sm" type="button">Clear</button>
+              </div>
+            </div>
+
+            <div id="nowSpeaking" class="now-speaking idle">
+              <span class="now-avatar" aria-hidden="true">🎙️</span>
+              <span class="now-meta">
+                <strong class="now-user"></strong>
+                <span class="now-text">—</span>
+              </span>
+            </div>
+
+            <ul id="queueList" class="queue-list"></ul>
+          </section>
+        </div>
+
+        <!-- CENTER -->
+        <section class="card card-tts col" data-section="tts">
+          <h2>เสียง TTS</h2>
+
+          <label class="field">
+            <span>ผู้ให้บริการ</span>
+            <select id="ttsProvider">
+              <option value="tokenme" selected>TokenMe API</option>
+              <option value="webspeech">Web Speech (สำรอง)</option>
+            </select>
+          </label>
+
+          <div id="tokenmeBox" class="provider-box">
+            <label class="field">
+              <span>TokenMe API Key</span>
+              <input id="apiKey" type="password" placeholder="••••••••••••••••" autocomplete="off" spellcheck="false" />
+            </label>
+
+            <div class="field-pair">
+              <label class="field">
+                <span>Model</span>
+                <input id="tmModel" type="text" value="paxa/paxa-tts-flash-v2" spellcheck="false" />
+              </label>
+              <label class="field">
+                <span>Voice</span>
+                <select id="tmVoice">
+                  <optgroup label="ผู้ชาย">
+                    <option value="khanomkrok">khanomkrok</option>
+                    <option value="massaman">massaman</option>
+                    <option value="thongek">thongek</option>
+                    <option value="panang">panang</option>
+                    <option value="oliang">oliang</option>
+                    <option value="mooping">mooping</option>
+                    <option value="sangkaya">sangkaya</option>
+                    <option value="khaoniao">khaoniao</option>
+                    <option value="kaprao">kaprao</option>
+                    <option value="latte">latte</option>
+                    <option value="espresso">espresso</option>
+                    <option value="oolong">oolong</option>
+                    <option value="satay">satay</option>
+                    <option value="kluaytod">kluaytod</option>
+                    <option value="hormok">hormok</option>
+                    <option value="khaotom">khaotom</option>
+                    <option value="krayasat">krayasat</option>
+                    <option value="khaijiao">khaijiao</option>
+                    <option value="chuchi">chuchi</option>
+                    <option value="krongkraeng">krongkraeng</option>
+                    <option value="khaolam">khaolam</option>
+                    <option value="plathu">plathu</option>
+                    <option value="kaengphet">kaengphet</option>
+                    <option value="kaengpa">kaengpa</option>
+                  </optgroup>
+                  <optgroup label="ผู้หญิง">
+                    <option value="nomyen">nomyen</option>
+                    <option value="tako">tako</option>
+                    <option value="foithong">foithong</option>
+                    <option value="sanaechan">sanaechan</option>
+                    <option value="tubtimkrob">tubtimkrob</option>
+                    <option value="bualoi">bualoi</option>
+                    <option value="lukchup">lukchup</option>
+                    <option value="lodchong">lodchong</option>
+                    <option value="woon">woon</option>
+                    <option value="tomyum">tomyum</option>
+                    <option value="khanomchan">khanomchan</option>
+                    <option value="cookie">cookie</option>
+                    <option value="mocha" selected>mocha</option>
+                    <option value="taohuay">taohuay</option>
+                    <option value="saku">saku</option>
+                    <option value="thongyod">thongyod</option>
+                    <option value="baitoey">baitoey</option>
+                    <option value="matum">matum</option>
+                    <option value="nammanao">nammanao</option>
+                    <option value="salim">salim</option>
+                    <option value="miangkham">miangkham</option>
+                    <option value="todmun">todmun</option>
+                    <option value="namprik">namprik</option>
+                    <option value="chormuang">chormuang</option>
+                    <option value="makham">makham</option>
+                    <option value="puifai">puifai</option>
+                  </optgroup>
+                </select>
+              </label>
+            </div>
+
+            <label class="field" id="proxyFieldWrap">
+              <span>Proxy URL</span>
+              <input id="proxyUrl" type="text" value="http://127.0.0.1:8765" />
+            </label>
+            <p class="hint soft" id="proxyHint">
+              รัน <code>python3 proxy/tokenme_proxy.py</code> ก่อนใช้จากเบราว์เซอร์
+            </p>
+
+            <div class="row proxy-test-row">
+              <button id="btnTestProxy" class="btn ghost block" type="button">ทดสอบ API</button>
+              <span id="proxyStatus" class="mini-status"></span>
+            </div>
+          </div>
+
+          <div id="webspeechBox" class="provider-box hidden">
+            <label class="field">
+              <span>เสียงในเครื่อง</span>
+              <select id="voiceSelect"></select>
+            </label>
+            <button id="btnRefreshVoices" class="btn ghost block" type="button">รีเฟรชรายการเสียง</button>
+          </div>
+
+          <div class="sliders">
+            <label class="slider-row" id="rateField">
+              <span class="slider-label">Rate</span>
+              <input id="rate" type="range" min="0.5" max="2" step="0.05" value="1" />
+              <em id="rateVal" class="slider-val">1.00</em>
+            </label>
+            <label class="slider-row" id="pitchField">
+              <span class="slider-label">Pitch</span>
+              <input id="pitch" type="range" min="0.5" max="2" step="0.05" value="1" />
+              <em id="pitchVal" class="slider-val">1.00</em>
+            </label>
+            <label class="slider-row">
+              <span class="slider-label">Volume</span>
+              <input id="volume" type="range" min="0" max="1" step="0.05" value="1" />
+              <em id="volumeVal" class="slider-val">1.00</em>
+            </label>
+          </div>
+
+          <button id="btnTestVoice" class="btn primary block lg" type="button">ทดสอบเสียง</button>
+        </section>
+
+        <!-- RIGHT -->
+        <section class="card card-filters col" data-section="filters">
+          <h2>ตัวกรอง</h2>
+
+          <label class="switch-row">
+            <span>อ่านชื่อผู้ส่ง</span>
+            <input id="optSayName" type="checkbox" checked />
+          </label>
+          <label class="switch-row">
+            <span>ข้าม !</span>
+            <input id="optSkipCommands" type="checkbox" checked />
+          </label>
+          <label class="switch-row">
+            <span>ข้ามบอท</span>
+            <input id="optSkipBots" type="checkbox" checked />
+          </label>
+          <label class="switch-row">
+            <span>ข้าม emote-only</span>
+            <input id="optSkipEmotes" type="checkbox" checked />
+          </label>
+          <label class="switch-row">
+            <span>ข้าม Channel Points</span>
+            <input id="optSkipRedeems" type="checkbox" checked />
+          </label>
+
+          <div class="filter-fields">
+            <label class="field">
+              <span>max queue</span>
+              <input id="maxQueue" type="number" min="1" max="200" value="20" />
+            </label>
+            <label class="field">
+              <span>ignore list</span>
+              <input id="ignoreList" type="text" placeholder="user1, user2" />
+            </label>
+            <label class="field">
+              <span>max length</span>
+              <input id="maxLen" type="number" min="20" max="500" value="200" />
+            </label>
+          </div>
+        </section>
+      </div>
+
+      <section class="card card-chat" data-section="chat">
+        <h2>แชทล่าสุด</h2>
+        <div id="chatLog" class="chat-log" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <footer class="footer">
+      <span>TokenMe · คีย์เก็บในเครื่องคุณเท่านั้น</span>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
