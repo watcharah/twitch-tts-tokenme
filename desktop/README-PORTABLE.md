@@ -30,7 +30,7 @@
 1. อัป `version` ใน `package.json` (เช่น `1.2.1`)
 2. Build portable:
    ```
-   npx electron-packager . TwitchChatTTS --platform=win32 --arch=x64 --out=dist --overwrite --icon=build/icon.ico --ignore="(^|/)\.git($|/)|(^|/)dist($|/)"
+   npx electron-packager . TwitchChatTTS --platform=win32 --arch=x64 --electron-version=45.0.0 --out=dist --overwrite --icon=build/icon.ico --ignore="(^|/)\.git($|/)|(^|/)dist($|/)"
    ```
 3. Zip โฟลเดอร์ `dist/TwitchChatTTS-win32-x64` เป็นชื่อไฟล์**ตรงนี้เท่านั้น**:
    `TwitchChatTTS-windows-portable.zip`
