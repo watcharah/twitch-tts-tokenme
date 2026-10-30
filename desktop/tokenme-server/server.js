@@ -7,6 +7,7 @@ const { URL } = require("url");
 const HOST = "127.0.0.1";
 const DEFAULT_PORT = 8765;
 const UPSTREAM = "https://api.tokenme.limited/api/v1/audio/speech";
+const UPSTREAM_CHAT = "https://api.tokenme.limited/api/v1/chat/completions";
 
 function sendJson(res, code, obj) {
   const body = Buffer.from(JSON.stringify(obj), "utf8");
@@ -29,9 +30,9 @@ function readBody(req) {
   });
 }
 
-function forwardToTokenMe(auth, payloadBuf) {
+function forwardToTokenMe(auth, payloadBuf, upstreamUrl, accept) {
   return new Promise((resolve, reject) => {
-    const u = new URL(UPSTREAM);
+    const u = new URL(upstreamUrl || UPSTREAM);
     const req = https.request(
       {
         hostname: u.hostname,
@@ -40,7 +41,7 @@ function forwardToTokenMe(auth, payloadBuf) {
         headers: {
           Authorization: auth,
           "Content-Type": "application/json",
-          Accept: "audio/mpeg, application/json, */*",
+          Accept: accept || "audio/mpeg, application/json, */*",
           "Content-Length": payloadBuf.length,
           "User-Agent": "TwitchChatTTS-Electron/1.0",
         },
@@ -109,6 +110,30 @@ function createServer() {
           return;
         }
         const upstream = await forwardToTokenMe(auth, Buffer.from(JSON.stringify(payload), "utf8"));
+        res.writeHead(upstream.status, {
+          "Content-Type": upstream.contentType,
+          "Content-Length": upstream.body.length,
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": "*",
+        });
+        res.end(upstream.body);
+        return;
+      }
+
+      if (req.method === "POST" && (pathName === "/chat" || pathName === "/v1/chat/completions")) {
+        const auth = req.headers.authorization || "";
+        if (!auth.toLowerCase().startsWith("bearer ")) {
+          sendJson(res, 401, { error: "missing Authorization: Bearer <key>" });
+          return;
+        }
+        const raw = await readBody(req);
+        let data = null;
+        try { data = JSON.parse(raw.toString("utf8") || "{}"); } catch (_) {}
+        if (!data || !Array.isArray(data.messages) || !data.model) {
+          sendJson(res, 400, { error: "missing model/messages" });
+          return;
+        }
+        const upstream = await forwardToTokenMe(auth, Buffer.from(JSON.stringify(data), "utf8"), UPSTREAM_CHAT, "application/json");
         res.writeHead(upstream.status, {
           "Content-Type": upstream.contentType,
           "Content-Length": upstream.body.length,

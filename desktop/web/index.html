@@ -167,6 +167,16 @@
               </label>
             </div>
 
+            <label class="switch-row">
+              <span>เพิ่มอารมณ์เสียง (AI)</span>
+              <input id="optAiEmotion" type="checkbox" />
+            </label>
+            <label class="field" id="aiEmotionModelWrap" style="opacity:0.4" title="ล็อกไว้ป้องกันใส่ผิด">
+              <span>AI Emotion Model</span>
+              <input id="aiEmotionModel" type="text" value="google/gemma-4-31b-it" spellcheck="false" disabled style="cursor:not-allowed" />
+            </label>
+            <p class="hint soft">AI ใส่แท็กอารมณ์ให้เสียงก่อนอ่าน (เรียก API เพิ่ม 1 ครั้ง/ข้อความ, ถ้าช้าเกิน 2 วิ จะอ่านข้อความเดิม)</p>
+
             <label class="field" id="proxyFieldWrap">
               <span>Proxy URL</span>
               <input id="proxyUrl" type="text" value="http://127.0.0.1:8765" />

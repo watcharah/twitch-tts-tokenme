@@ -16,6 +16,8 @@
     apiKey: $("apiKey"),
     tmModel: $("tmModel"),
     tmVoice: $("tmVoice"),
+    optAiEmotion: $("optAiEmotion"),
+    aiEmotionModel: $("aiEmotionModel"),
     proxyUrl: $("proxyUrl"),
     btnTestProxy: $("btnTestProxy"),
     proxyStatus: $("proxyStatus"),
@@ -55,6 +57,17 @@
   ]);
 
   const TOKENME_DIRECT = "https://api.tokenme.limited/api/v1/audio/speech";
+  const TOKENME_CHAT_DIRECT = "https://api.tokenme.limited/api/v1/chat/completions";
+  const AI_EMOTION_DEFAULT_MODEL = "google/gemma-4-31b-it";
+  const AI_EMOTION_TIMEOUT_MS = 2000;
+  const AI_EMOTION_MAX_TAGS = 2;
+  const AI_EMOTION_SYSTEM =
+    "You add voice-emotion tags for Thai TTS. Return ONLY the original text with tags inserted, nothing else. " +
+    "Rules: do not change, add, remove, translate or reorder any words or digits. " +
+    "Insert at most 2 short tags in square brackets, e.g. [ร่าเริง], [ตื่นเต้น], [หัวเราะ], [เศร้า], [กระซิบ]. " +
+    "If neutral, return text unchanged.";
+  // speakText -> enhanced text (reused by queue + chat re-run speaker)
+  const aiEmotionCache = new Map();
 
   let ws = null;
   let connectedChannel = null;
@@ -119,6 +132,7 @@
       apiKey: el.apiKey.value,
       tmModel: el.tmModel.value,
       tmVoice: el.tmVoice.value,
+      aiEmotion: el.optAiEmotion.checked,
       proxyUrl: el.proxyUrl.value,
       voice: el.voiceSelect.value,
       rate: el.rate.value,
@@ -155,6 +169,9 @@
           el.tmVoice.value = v;
         }
       }
+      if (typeof d.aiEmotion === "boolean") el.optAiEmotion.checked = d.aiEmotion;
+      // aiEmotionModel is locked to AI_EMOTION_DEFAULT_MODEL; ignore any saved value.
+      if (el.aiEmotionModel) el.aiEmotionModel.value = AI_EMOTION_DEFAULT_MODEL;
       if (d.proxyUrl) el.proxyUrl.value = d.proxyUrl;
       if (d.rate) el.rate.value = d.rate;
       if (d.pitch) el.pitch.value = d.pitch;
@@ -409,6 +426,83 @@
     });
   }
 
+  function stripTags(s) {
+    return String(s || "").replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  /** Validate LLM output: same words as original, <= N short tags. Returns null if invalid. */
+  function validateEmotionOutput(original, out) {
+    let s = String(out || "").trim();
+    if (!s) return null;
+    if (s.includes("\n")) s = s.replace(/\s+/g, " ");
+    let n = 0;
+    s = s.replace(/\[([^\]]*)\]/g, (m, inner) => {
+      n++;
+      const t = inner.trim();
+      if (n > AI_EMOTION_MAX_TAGS || !t || t.length > 30) return " ";
+      return "[" + t + "]";
+    }).replace(/\s+/g, " ").trim();
+    const body = stripTags(s);
+    if (!body) return null; // tag-only
+    if (body !== stripTags(original)) return null;
+    return s;
+  }
+
+  async function postChat(url, headers, body, signal) {
+    const res = await fetch(url, { method: "POST", headers, body, signal });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const c = j && j.choices && j.choices[0];
+    return (c && c.message && c.message.content) || "";
+  }
+
+  /** Optionally add emotion tags via TokenMe LLM. Never throws; falls back to original. */
+  async function enhanceWithEmotion(text) {
+    const original = String(text || "");
+    if (!el.optAiEmotion || !el.optAiEmotion.checked) return original;
+    if (el.ttsProvider.value !== "tokenme") return original;
+    if (original.trim().length < 4) return original;
+    if (aiEmotionCache.has(original)) return aiEmotionCache.get(original);
+    const key = getApiKey();
+    if (!key) return original;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), AI_EMOTION_TIMEOUT_MS);
+    try {
+      const body = JSON.stringify({
+        model: AI_EMOTION_DEFAULT_MODEL,
+        temperature: 0,
+        max_tokens: Math.min(1024, 64 + original.length * 2),
+        messages: [
+          { role: "system", content: AI_EMOTION_SYSTEM },
+          { role: "user", content: original },
+        ],
+      });
+      const headers = { Authorization: "Bearer " + key, "Content-Type": "application/json" };
+      const proxyBase = (el.proxyUrl.value || "").replace(/\/$/, "");
+      let out;
+      if (proxyBase && !preferDirectTokenMe) {
+        try {
+          out = await postChat(proxyBase + "/chat", headers, body, ctrl.signal);
+        } catch (e) {
+          if (ctrl.signal.aborted) throw e;
+          out = await postChat(TOKENME_CHAT_DIRECT, headers, body, ctrl.signal);
+        }
+      } else {
+        out = await postChat(TOKENME_CHAT_DIRECT, headers, body, ctrl.signal);
+      }
+      const ok = validateEmotionOutput(original, out);
+      const result = ok || original;
+      aiEmotionCache.set(original, result);
+      while (aiEmotionCache.size > 300) aiEmotionCache.delete(aiEmotionCache.keys().next().value);
+      return result;
+    } catch (e) {
+      console.warn("AI emotion fallback:", e && e.message);
+      return original;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function speakTokenMe(text) {
     const blob = await fetchTokenMeMp3(text);
     await playBlob(blob);
@@ -487,7 +581,9 @@
     setNowSpeaking(item.user, item.text);
     try {
       if (el.ttsProvider.value === "tokenme") {
-        await speakTokenMe(item.speakText);
+        if (!item.emoSpeak) item.emoSpeak = await enhanceWithEmotion(item.speakText);
+        if (currentItem !== item) return; // skipped/paused while enhancing
+        await speakTokenMe(item.emoSpeak);
       } else {
         await speakWebSpeech(item.speakText, item.lang);
       }
@@ -784,7 +880,7 @@
     "rate", "pitch", "volume", "optSayName", "optSkipCommands", "optSkipBots",
     "optSkipEmotes", "optSkipRedeems",
     "maxQueue", "ignoreList", "maxLen", "proxyUrl", "voiceSelect", "channel",
-    "apiKey", "tmModel", "tmVoice",
+    "apiKey", "tmModel", "tmVoice", "optAiEmotion",
   ].forEach((id) => {
     const node = $(id);
     if (!node) return;
